@@ -387,6 +387,30 @@ else
     print_fail "Should show error for non-existent file"
 fi
 
+print_test "Reject tampered restore metadata"
+echo "sensitive" >tamper.txt
+rm tamper.txt
+entry=$(tail -n 1 "$UNDO_STACK")
+if [ -z "$entry" ]; then
+    print_fail "Undo stack should contain tampered file entry"
+else
+    trash_name="${entry%|*}"
+    trash_dir="${entry#*|}"
+    info_file="$trash_dir/info/${trash_name}.info"
+    echo "../etc/passwd" >"$info_file"
+    output=$(rm --undo 2>&1 || true)
+    if echo "$output" | grep -q "Invalid original path metadata"; then
+        if [ ! -f "../etc/passwd" ] && [ ! -f "tamper.txt" ]; then
+            print_pass "Tampered metadata blocked restore"
+        else
+            print_fail "Tampered metadata should not restore file"
+        fi
+    else
+        print_fail "Should reject tampered metadata"
+    fi
+    /bin/rm -f "$trash_dir/files/$trash_name" "$info_file"
+fi
+
 print_scenario "Command Line Interface"
 print_test "Check version flag"
 if rm --version 2>&1 | grep -q "rm-safely"; then
